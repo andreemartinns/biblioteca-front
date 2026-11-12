@@ -59,7 +59,7 @@
     <button data-tab="cadastros">Cadastros</button>
   </nav>
   <div class="key">
-    <input id="apikey" type="password" placeholder="Chave de API" autocomplete="off" aria-label="Chave de API">
+    <input id="apikey" type="password" placeholder="Chave de API" autocomplete="off" aria-label="Chave de API" maxlength="200">
     <button class="btn sec sm" id="genkey" type="button" style="background:#fff">Gerar chave</button>
   </div>
 </div></div>
@@ -70,10 +70,10 @@
   <section id="tab-livros">
     <div class="panel">
       <h2>Novo livro</h2>
-      <form id="f-livro">
-        <label>Título<input name="titulo" required minlength="2"></label>
-        <label>ISBN<input name="isbn" required></label>
-        <label>Ano<input name="ano" type="number" min="0" max="2100" required></label>
+      <form id="f-livro" novalidate>
+        <label>Título<input name="titulo" required maxlength="150"></label>
+        <label>ISBN (10 ou 13 números)<input name="isbn" required maxlength="13" inputmode="numeric" data-filtro="num"></label>
+        <label>Ano<input name="ano" required maxlength="4" inputmode="numeric" data-filtro="num"></label>
         <label>Categoria<select name="categoria" required></select></label>
         <label>Autor<select name="autor" required></select></label>
         <button class="btn" type="submit">Salvar</button>
@@ -92,7 +92,7 @@
   <section id="tab-emprestimos" hidden>
     <div class="panel">
       <h2>Novo empréstimo</h2>
-      <form id="f-emp">
+      <form id="f-emp" novalidate>
         <label>Usuário<select name="usuario" required></select></label>
         <label>Livro<select name="livro" required></select></label>
         <label>Devolução prevista<input name="data" type="date" required></label>
@@ -109,16 +109,16 @@
 
   <section id="tab-cadastros" hidden>
     <div class="panel"><h2>Nova categoria</h2>
-      <form id="f-cat"><label>Nome<input name="nome" required></label><button class="btn" type="submit">Salvar</button></form></div>
+      <form id="f-cat" novalidate><label>Nome<input name="nome" required maxlength="60" data-filtro="nome"></label><button class="btn" type="submit">Salvar</button></form></div>
     <div class="panel"><h2>Novo autor</h2>
-      <form id="f-aut"><label>Nome<input name="nome" required></label>
-        <label>Nacionalidade<input name="nacionalidade" required></label><button class="btn" type="submit">Salvar</button></form></div>
+      <form id="f-aut" novalidate><label>Nome<input name="nome" required maxlength="100" data-filtro="nome"></label>
+        <label>Nacionalidade<input name="nacionalidade" required maxlength="60" data-filtro="nome"></label><button class="btn" type="submit">Salvar</button></form></div>
     <div class="panel"><h2>Novo usuário</h2>
-      <form id="f-usu">
-        <label>Nome<input name="nome" required></label>
-        <label>E-mail<input name="email" type="email" required></label>
-        <label>Telefone<input name="telefone" required></label>
-        <label>Endereço<input name="endereco" required></label>
+      <form id="f-usu" novalidate>
+        <label>Nome<input name="nome" required maxlength="100" data-filtro="nome"></label>
+        <label>E-mail<input name="email" type="email" required maxlength="120"></label>
+        <label>Telefone (DDD + número)<input name="telefone" required maxlength="11" inputmode="numeric" data-filtro="num"></label>
+        <label>Endereço<input name="endereco" required maxlength="150"></label>
         <label>Nascimento<input name="nasc" type="date" required></label>
         <button class="btn" type="submit">Salvar</button></form></div>
   </section>
@@ -161,12 +161,54 @@ const opcoes = (arr, rotulo) => arr.length
   ? arr.map(o => `<option value="${o.id}">${esc(rotulo(o))}</option>`).join("")
   : `<option value="">Cadastre primeiro</option>`;
 
+/* filtros de digitação: só números / só letras */
+document.addEventListener("input", e => {
+  const f = e.target.dataset && e.target.dataset.filtro;
+  if (f === "num") e.target.value = e.target.value.replace(/\D/g, "");
+  if (f === "nome") e.target.value = e.target.value.replace(/[^\p{L}\s'.-]/gu, "");
+});
+
+/* limites de data */
+const hoje = new Date().toISOString().slice(0, 10);
+$("#f-emp [name=data]").min = hoje;
+$("#f-usu [name=nasc]").max = hoje;
+$("#f-usu [name=nasc]").min = "1900-01-01";
+
+/* validação antes de enviar */
+const anoAtual = new Date().getFullYear();
+const validadores = {
+  "#f-livro": f => {
+    if (f.titulo.length < 2) return "Título: mínimo 2 caracteres.";
+    if (!/^(\d{10}|\d{13})$/.test(f.isbn)) return "ISBN: informe 10 ou 13 números.";
+    const a = Number(f.ano);
+    if (!/^\d{4}$/.test(f.ano) || a < 1000 || a > anoAtual + 1) return "Ano: informe 4 números entre 1000 e " + (anoAtual + 1) + ".";
+    if (!f.categoria || !f.autor) return "Cadastre uma categoria e um autor primeiro.";
+  },
+  "#f-cat": f => { if (f.nome.length < 2) return "Nome: mínimo 2 letras."; },
+  "#f-aut": f => {
+    if (f.nome.length < 3) return "Nome: mínimo 3 letras.";
+    if (f.nacionalidade.length < 2) return "Nacionalidade: mínimo 2 letras.";
+  },
+  "#f-usu": f => {
+    if (f.nome.length < 3) return "Nome: mínimo 3 letras.";
+    if (!/^\S+@\S+\.\S+$/.test(f.email)) return "E-mail inválido.";
+    if (!/^\d{10,11}$/.test(f.telefone)) return "Telefone: informe DDD + número (10 ou 11 números).";
+    if (f.endereco.length < 5) return "Endereço: mínimo 5 caracteres.";
+    if (!f.nasc || f.nasc > hoje) return "Nascimento não pode ser no futuro.";
+  },
+  "#f-emp": f => {
+    if (!f.usuario || !f.livro) return "Cadastre um usuário e um livro primeiro.";
+    if (!f.data || f.data < hoje) return "A devolução prevista não pode ser no passado.";
+  }
+};
+
 /* chave de API */
 $("#apikey").value = localStorage.getItem("apikey") || "";
 $("#apikey").addEventListener("change", e => localStorage.setItem("apikey", e.target.value.trim()));
 $("#genkey").addEventListener("click", async () => {
-  const dono = prompt("Nome do dono da chave (3 a 100 caracteres):");
+  const dono = (prompt("Nome do dono da chave (3 a 100 caracteres):") || "").trim();
   if (!dono) return;
+  if (dono.length < 3 || dono.length > 100) { toast("O nome deve ter de 3 a 100 caracteres.", true); return; }
   try {
     const k = await api("/api-keys", { method: "POST", body: { dono } });
     $("#apikey").value = k.chave; localStorage.setItem("apikey", k.chave);
@@ -235,7 +277,11 @@ document.addEventListener("click", async e => {
 function enviar(sel, fn, ok) {
   $(sel).addEventListener("submit", async ev => {
     ev.preventDefault();
-    const f = Object.fromEntries(new FormData(ev.target));
+    const f = Object.fromEntries([...new FormData(ev.target)].map(([k, v]) => [k, String(v).trim()]));
+    const campoVazio = [...ev.target.elements].find(x => x.required && !String(x.value).trim());
+    if (campoVazio) { toast("Preencha todos os campos.", true); campoVazio.focus(); return; }
+    const erro = validadores[sel] && validadores[sel](f);
+    if (erro) { toast(erro, true); return; }
     try { await fn(f); ev.target.reset(); toast(ok); await tudo(); if (!$("#tab-emprestimos").hidden) carregarEmprestimos(); }
     catch (err) { toast(err.message, true); }
   });
